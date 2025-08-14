@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>おばけをさがせ！</title>
+<style>
+  body { margin:0; background:black; overflow:hidden; font-family:sans-serif; color:white; }
+  #count { position:absolute; top:10px; left:10px; font-size:24px; }
+</style>
+</head>
+<body>
+<div id="count">0</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ウィンドウリサイズ対応
+window.addEventListener('resize', ()=>{
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+let ghostImgs = [];
+let totalCount = 0;
+
+const screamSound = new Audio('scream.mp3');
+const baseLightRadius = 150;
+const lightRadius = baseLightRadius * 1.5;
+
+let light = null;
+
+// 画像読み込み
+for(let i=1;i<=5;i++){
+    const img = new Image();
+    img.src = `ghost${i}.png`;
+    ghostImgs.push(img);
+}
+
+// Ghost クラス
+class Ghost {
+    constructor(x, y, img){
+        this.x = x;
+        this.y = y;
+        this.size = 320;
+        this.img = img;
+        this.rotation = 0;
+        this.rotating = false;
+        this.visible = true;
+        this.waitTime = 500; // 0.5秒表示
+        setTimeout(() => {
+            this.rotating = true;
+            screamSound.currentTime = 0;
+            screamSound.play();
+        }, this.waitTime);
+    }
+    update(){
+        if(this.rotating){
+            this.rotation += 0.1;
+            if(this.rotation >= Math.PI*2){
+                this.visible = false;
+            }
+        }
+    }
+    draw(){
+        if(!this.visible) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.drawImage(this.img, -this.size/2, -this.size/2, this.size, this.size);
+        ctx.restore();
+    }
+}
+
+// 座標を画面内に制限
+function clampCoords(x, y){
+    const clampedX = Math.min(Math.max(x, lightRadius), canvas.width - lightRadius);
+    const clampedY = Math.min(Math.max(y, lightRadius), canvas.height - lightRadius);
+    return {x: clampedX, y: clampedY};
+}
+
+// 操作時
+function handleAction(x, y){
+    const pos = clampCoords(x, y);
+    light = {x: pos.x, y: pos.y, ghost:null};
+
+    // 光自動消滅 3.5秒後
+    setTimeout(()=>{ light = null; }, 3500);
+
+    const rand = Math.random();
+    if(rand < 0.5){
+        light.ghost = null;
+    } else {
+        let ghostIndex = Math.floor((rand-0.5)/0.1);
+        if(ghostIndex >= ghostImgs.length) ghostIndex = ghostImgs.length-1;
+
+        const ghostX = Math.min(Math.max(pos.x, 160), canvas.width - 160);
+        const ghostY = Math.min(Math.max(pos.y, 160), canvas.height - 160);
+        const g = new Ghost(ghostX, ghostY, ghostImgs[ghostIndex]);
+        light.ghost = g;
+        totalCount++;
+        document.getElementById('count').innerText = totalCount;
+    }
+}
+
+// 描画ループ
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle='black';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if(light){
+        ctx.beginPath();
+        ctx.arc(light.x, light.y, lightRadius, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,127,1)';
+        ctx.fill();
+
+        if(light.ghost){
+            light.ghost.update();
+            light.ghost.draw();
+        }
+    }
+
+    requestAnimationFrame(draw);
+}
+draw();
+
+// 操作イベント
+document.addEventListener('mousedown', e=>{
+    handleAction(e.clientX, e.clientY);
+});
+
+document.addEventListener('touchstart', e=>{
+    handleAction(e.touches[0].clientX, e.touches[0].clientY);
+});
+
+document.addEventListener('keydown', ()=>{
+    const x = Math.random()*canvas.width;
+    const y = Math.random()*canvas.height;
+    handleAction(x, y);
+});
+</script>
+</body>
+</html>
