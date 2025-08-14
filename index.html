@@ -32,6 +32,10 @@ const lightRadius = baseLightRadius * 1.5;
 
 let light = null;
 
+// キーボード連打防止
+let lastKeyTime = 0;
+const keyCooldown = 2000; // 2秒
+
 // 画像読み込み
 for(let i=1;i<=5;i++){
     const img = new Image();
@@ -49,7 +53,7 @@ class Ghost {
         this.rotation = 0;
         this.rotating = false;
         this.visible = true;
-        this.waitTime = 500; // 0.5秒表示
+        this.waitTime = 300; // 0.3秒表示
         setTimeout(() => {
             this.rotating = true;
             screamSound.currentTime = 0;
@@ -128,16 +132,20 @@ function draw(){
 }
 draw();
 
-// 操作イベント
+// マウスクリック・タッチ操作（連打可）
 document.addEventListener('mousedown', e=>{
     handleAction(e.clientX, e.clientY);
 });
-
 document.addEventListener('touchstart', e=>{
     handleAction(e.touches[0].clientX, e.touches[0].clientY);
 });
 
+// キーボード操作（5秒間隔制限）
 document.addEventListener('keydown', ()=>{
+    const now = Date.now();
+    if(now - lastKeyTime < keyCooldown) return;
+    lastKeyTime = now;
+
     const x = Math.random()*canvas.width;
     const y = Math.random()*canvas.height;
     handleAction(x, y);
