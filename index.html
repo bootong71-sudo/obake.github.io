@@ -5,45 +5,77 @@
 <title>おばけをさがせ！</title>
 <style>
   body { margin:0; background:black; overflow:hidden; font-family:sans-serif; color:white; }
-  #count { position:absolute; top:10px; left:10px; font-size:24px; }
+  #countArea {
+    position:absolute; top:10px; left:10px; font-size:20px;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .foundItem {
+    display:flex; align-items:center; gap:5px;
+  }
+  .foundItem img {
+    width:40px; height:40px;
+  }
+  #sliderArea {
+    position:absolute; top:10px; right:120px; font-size:18px;
+    background:rgba(0,0,0,0.5); padding:5px; border-radius:5px;
+  }
+  #message {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:48px; color:yellow; text-align:center; display:none;
+  }
+  #startBtn {
+    position:absolute; top:10px; right:10px;
+    font-size:18px; padding:5px 10px; cursor:pointer;
+  }
 </style>
 </head>
 <body>
-<div id="count">0</div>
+<div id="countArea"></div>
+<div id="sliderArea">
+  目標人数:
+  <input type="range" id="targetSlider" min="3" max="10" value="5">
+  <span id="targetValue">5</span> にん
+</div>
+<button id="startBtn">スタート</button>
+<div id="message"></div>
 <canvas id="gameCanvas"></canvas>
+
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// ウィンドウリサイズ対応
 window.addEventListener('resize', ()=>{
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 });
 
 let ghostImgs = [];
+let countAreaDiv = document.getElementById('countArea');
+let messageDiv = document.getElementById('message');
+let startBtn = document.getElementById('startBtn');
+
 let totalCount = 0;
+let targetCount = 5;
+let gameEnded = false;
+let gameStarted = false;
 
 const screamSound = new Audio('scream.mp3');
+const fanfareSound = new Audio('fanfare.mp3');
 const baseLightRadius = 150;
 const lightRadius = baseLightRadius * 1.5;
-
 let light = null;
 
-// キーボード連打防止
 let lastKeyTime = 0;
-const keyCooldown = 2000; // 2秒
+const keyCooldown = 2000;
 
-// 画像読み込み
 for(let i=1;i<=5;i++){
     const img = new Image();
     img.src = `ghost${i}.png`;
     ghostImgs.push(img);
 }
 
-// Ghost クラス
 class Ghost {
     constructor(x, y, img){
         this.x = x;
@@ -53,7 +85,7 @@ class Ghost {
         this.rotation = 0;
         this.rotating = false;
         this.visible = true;
-        this.waitTime = 300; // 0.3秒表示
+        this.waitTime = 300;
         setTimeout(() => {
             this.rotating = true;
             screamSound.currentTime = 0;
@@ -78,25 +110,22 @@ class Ghost {
     }
 }
 
-// 座標を画面内に制限
 function clampCoords(x, y){
     const clampedX = Math.min(Math.max(x, lightRadius), canvas.width - lightRadius);
     const clampedY = Math.min(Math.max(y, lightRadius), canvas.height - lightRadius);
     return {x: clampedX, y: clampedY};
 }
 
-// 操作時
 function handleAction(x, y){
+    if(!gameStarted || gameEnded) return;
+
     const pos = clampCoords(x, y);
     light = {x: pos.x, y: pos.y, ghost:null};
 
-    // 光自動消滅 3.5秒後
     setTimeout(()=>{ light = null; }, 3500);
 
     const rand = Math.random();
-    if(rand < 0.5){
-        light.ghost = null;
-    } else {
+    if(rand >= 0.5){
         let ghostIndex = Math.floor((rand-0.5)/0.1);
         if(ghostIndex >= ghostImgs.length) ghostIndex = ghostImgs.length-1;
 
@@ -104,15 +133,55 @@ function handleAction(x, y){
         const ghostY = Math.min(Math.max(pos.y, 160), canvas.height - 160);
         const g = new Ghost(ghostX, ghostY, ghostImgs[ghostIndex]);
         light.ghost = g;
+
         totalCount++;
-        document.getElementById('count').innerText = totalCount;
+        updateCountDisplay(ghostImgs[ghostIndex]);
+
+        if(totalCount >= targetCount){
+            endGame();
+        }
     }
 }
 
-// 描画ループ
+function updateCountDisplay(img){
+    const item = document.createElement('div');
+    item.className = 'foundItem';
+
+    const icon = document.createElement('img');
+    icon.src = img.src;
+
+    const label = document.createElement('span');
+    label.textContent = totalCount + 'にん';
+
+    item.appendChild(icon);
+    item.appendChild(label);
+
+    countAreaDiv.appendChild(item);
+}
+
+function endGame(){
+    gameEnded = true;
+    setTimeout(() => {
+        fanfareSound.play();
+        messageDiv.textContent = `${totalCount}にん みつけたよ。こわかったね。`;
+        messageDiv.style.display = 'block';
+        setTimeout(() => {
+            startBtn.style.display = 'block';
+        }, 3000);
+    }, 1000);
+}
+
+function resetGame(){
+    totalCount = 0;
+    gameEnded = false;
+    gameStarted = true;
+    countAreaDiv.innerHTML = '';
+    messageDiv.style.display = 'none';
+    light = null;
+}
+
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
     ctx.fillStyle='black';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
@@ -127,28 +196,33 @@ function draw(){
             light.ghost.draw();
         }
     }
-
     requestAnimationFrame(draw);
 }
 draw();
 
-// マウスクリック・タッチ操作（連打可）
 document.addEventListener('mousedown', e=>{
     handleAction(e.clientX, e.clientY);
 });
 document.addEventListener('touchstart', e=>{
     handleAction(e.touches[0].clientX, e.touches[0].clientY);
 });
-
-// キーボード操作（5秒間隔制限）
 document.addEventListener('keydown', ()=>{
     const now = Date.now();
     if(now - lastKeyTime < keyCooldown) return;
     lastKeyTime = now;
-
     const x = Math.random()*canvas.width;
     const y = Math.random()*canvas.height;
     handleAction(x, y);
+});
+
+document.getElementById('targetSlider').addEventListener('input', e=>{
+    targetCount = parseInt(e.target.value);
+    document.getElementById('targetValue').textContent = targetCount;
+});
+
+startBtn.addEventListener('click', ()=>{
+    resetGame();
+    startBtn.style.display = 'none';
 });
 </script>
 </body>
